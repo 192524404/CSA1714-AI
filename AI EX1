@@ -1,0 +1,48 @@
+from collections import deque
+
+def get_neighbors(state):
+    neighbors = []
+    board = [list(row) for row in state]
+    # Find position of 0 (empty space)
+    r, c = [(r, c) for r in range(3) for c in range(3) if board[r][c] == 0][0]
+    moves = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # Up, Down, Left, Right
+    
+    for dr, dc in moves:
+        nr, nc = r + dr, c + dc
+        if 0 <= nr < 3 and 0 <= nc < 3:
+            # Swap empty space with target adjacent tile
+            board[r][c], board[nr][nc] = board[nr][nc], board[r][c]
+            neighbors.append(tuple(tuple(row) for row in board))
+            # Swap back
+            board[r][c], board[nr][nc] = board[nr][nc], board[r][c]
+    return neighbors
+
+def solve_8_puzzle(initial_state, goal_state):
+    queue = deque([(initial_state, [])])
+    visited = {initial_state}
+    
+    while queue:
+        state, path = queue.popleft()
+        if state == goal_state:
+            return path + [state]
+        for neighbor in get_neighbors(state):
+            if neighbor not in visited:
+                visited.add(neighbor)
+                queue.append((neighbor, path + [state]))
+    return None
+
+# Initial and Goal States
+start = ((1, 2, 3), 
+         (4, 0, 6), 
+         (7, 5, 8))
+
+goal = ((1, 2, 3), 
+        (4, 5, 6), 
+        (7, 8, 0))
+
+solution = solve_8_puzzle(start, goal)
+print "Steps to solve: {}".format(len(solution) - 1)
+for step in solution:
+    for row in step:
+        print(row)
+    print("---")

@@ -1,0 +1,189 @@
+PROGRAM CODE:
+"""
+Warehouse Delivery Robot - BFS and DFS on a 5x5 grid
+Cells are (row, col), 1-indexed. Start=(1,1), Goal=(5,5)
+Move order (tie-breaking): Up, Down, Left, Right
+"""
+
+from collections import deque
+
+N = 5
+START, GOAL = (1, 1), (5, 5)
+BLOCKED = {(2, 2), (2, 3), (3, 3), (4, 2), (4, 4)}
+MOVES = [("Up", -1, 0), ("Down", 1, 0), ("Left", 0, -1), ("Right", 0, 1)]
+
+def actions(state):
+    """Return list of (action, next_state) that are legal from state."""
+    r, c = state
+    result = []
+    for name, dr, dc in MOVES:
+        nr, nc = r + dr, c + dc
+        if 1 <= nr <= N and 1 <= nc <= N and (nr, nc) not in BLOCKED:
+            result.append((name, (nr, nc)))
+    return result
+
+def build_path(parent, state):
+    path = []
+    while state is not None:
+        path.append(state)
+        state = parent[state]
+    return path[::-1]
+
+def fmt(cells):
+    return "[" + ", ".join(f"({r},{c})" for r, c in cells) + "]"
+
+def print_grid(path=None):
+    path = set(path or [])
+    print("   c1 c2 c3 c4 c5")
+    for r in range(1, N + 1):
+        row = f"r{r} "
+        for c in range(1, N + 1):
+            if (r, c) == START:    ch = " S "
+            elif (r, c) == GOAL:   ch = " G "
+            elif (r, c) in BLOCKED: ch = " # "
+            elif (r, c) in path:   ch = " * "
+            else:                  ch = " . "
+            row += ch + " "
+        print(row.rstrip())
+
+def bfs():
+    frontier = deque([START])
+    parent = {START: None}
+    explored = []
+    step = 0
+    print("=== BFS (Queue: FIFO) ===")
+    print(f"Initial queue: {fmt(frontier)}")
+    while frontier:
+        node = frontier.popleft() # dequeue from front
+        step += 1
+        explored.append(node)
+        if node == GOAL:
+            print(f"Step {step:2d}: Dequeue {node} -> GOAL REACHED")
+            break
+        added = []
+        for name, nxt in actions(node):
+            if nxt not in parent: # not visited / not in frontier
+                parent[nxt] = node
+                frontier.append(nxt) # enqueue at back
+                added.append(nxt)
+        node_str = f"({node[0]}, {node[1]})"
+        print(f"Step {step:2d}: Dequeue {node_str:<8s} add {fmt(added):28s} Queue: {fmt(frontier)}")
+    path = build_path(parent, GOAL)
+    print(f"\nNodes expanded (order): {fmt(explored)}")
+    print(f"Path : {' -> '.join(map(str, path))}")
+    print(f"Cost : {len(path) - 1}")
+    return path, explored
+
+def dfs():
+    stack = [(START, None)] # stack holds (state, parent)
+    parent = {}
+    visited = set()
+    explored = []
+    step = 0
+    show = lambda stk: fmt([n for n, _ in stk])
+    print("=== DFS (Stack: LIFO) ===")
+    print(f"Initial stack (top at right): {show(stack)}")
+    while stack:
+        node, par = stack.pop() # pop from top
+        if node in visited:
+            continue
+        visited.add(node)
+        parent[node] = par
+        step += 1
+        explored.append(node)
+        if node == GOAL:
+            print(f"Step {step:2d}: Pop {node} -> GOAL REACHED")
+            break
+        pushed = []
+        # push in reverse so that 'Up' ends on top of the stack
+        for name, nxt in reversed(actions(node)):
+            if nxt not in visited:
+                stack.append((nxt, node))
+                pushed.append(nxt)
+        node_str = f"({node[0]}, {node[1]})"
+        print(f"Step {step:2d}: Pop {node_str:<8s} push {fmt(pushed):28s} Stack: {show(stack)}")
+    path = build_path(parent, GOAL)
+    print(f"\nNodes expanded (order): {fmt(explored)}")
+    print(f"Path : {' -> '.join(map(str, path))}")
+    print(f"Cost : {len(path) - 1}")
+    return path, explored
+
+if __name__ == "__main__":
+    print("Warehouse layout (S=start, G=goal, #=shelf)")
+    print_grid()
+    print()
+    bpath, bexp = bfs()
+    print()
+    print_grid(bpath)
+    print("\n")
+    dpath, dexp = dfs()
+    print()
+    print_grid(dpath)
+
+OUTPUT:
+Warehouse layout (S=start, G=goal, #=shelf)
+   c1 c2 c3 c4 c5
+r1  S   .   .   .   .
+r2  .   #   #   .   .
+r3  .   .   #   .   .
+r4  .   #   .   #   .
+r5  .   .   .   .   G
+
+=== BFS (Queue: FIFO) ===
+Initial queue: [(1,1)]
+Step  1: Dequeue (1, 1)   add [(2,1), (1,2)]             Queue: [(2,1), (1,2)]
+Step  2: Dequeue (2, 1)   add [(3,1)]                    Queue: [(1,2), (3,1)]
+Step  3: Dequeue (1, 2)   add [(1,3)]                    Queue: [(3,1), (1,3)]
+Step  4: Dequeue (3, 1)   add [(4,1), (3,2)]             Queue: [(1,3), (4,1), (3,2)]
+Step  5: Dequeue (1, 3)   add [(1,4)]                    Queue: [(4,1), (3,2), (1,4)]
+Step  6: Dequeue (4, 1)   add [(5,1)]                    Queue: [(3,2), (1,4), (5,1)]
+Step  7: Dequeue (3, 2)   add []                         Queue: [(1,4), (5,1)]
+Step  8: Dequeue (1, 4)   add [(2,4), (1,5)]             Queue: [(5,1), (2,4), (1,5)]
+Step  9: Dequeue (5, 1)   add [(5,2)]                    Queue: [(2,4), (1,5), (5,2)]
+Step 10: Dequeue (2, 4)   add [(3,4), (2,5)]             Queue: [(1,5), (5,2), (3,4), (2,5)]
+Step 11: Dequeue (1, 5)   add []                         Queue: [(5,2), (3,4), (2,5)]
+Step 12: Dequeue (5, 2)   add [(5,3)]                    Queue: [(3,4), (2,5), (5,3)]
+Step 13: Dequeue (3, 4)   add [(3,5)]                    Queue: [(2,5), (5,3), (3,5)]
+Step 14: Dequeue (2, 5)   add []                         Queue: [(5,3), (3,5)]
+Step 15: Dequeue (5, 3)   add [(4,3), (5,4)]             Queue: [(3,5), (4,3), (5,4)]
+Step 16: Dequeue (3, 5)   add [(4,5)]                    Queue: [(4,3), (5,4), (4,5)]
+Step 17: Dequeue (4, 3)   add []                         Queue: [(5,4), (4,5)]
+Step 18: Dequeue (5, 4)   add [(5,5)]                    Queue: [(4,5), (5,5)]
+Step 19: Dequeue (4, 5)   add []                         Queue: [(5,5)]
+Step 20: Dequeue (5, 5) -> GOAL REACHED
+
+Nodes expanded (order): [(1,1), (2,1), (1,2), (3,1), (1,3), (4,1), (3,2), (1,4), (5,1), (2,4), (1,5), (5,2), (3,4), (2,5), (5,3), (3,5), (4,3), (5,4), (4,5), (5,5)]
+Path : (1, 1) -> (2, 1) -> (3, 1) -> (4, 1) -> (5, 1) -> (5, 2) -> (5, 3) -> (5, 4) -> (5, 5)
+Cost : 8
+
+   c1 c2 c3 c4 c5
+r1  S   .   .   .   .
+r2  *   #   #   .   .
+r3  *   .   #   .   .
+r4  *   #   .   #   .
+r5  *   *   *   *   G
+
+
+=== DFS (Stack: LIFO) ===
+Initial stack (top at right): [(1,1)]
+Step  1: Pop (1, 1)   push [(1,2), (2,1)]            Stack: [(1,2), (2,1)]
+Step  2: Pop (2, 1)   push [(3,1)]                   Stack: [(1,2), (3,1)]
+Step  3: Pop (3, 1)   push [(3,2), (4,1)]            Stack: [(1,2), (3,2), (4,1)]
+Step  4: Pop (4, 1)   push [(5,1)]                   Stack: [(1,2), (3,2), (5,1)]
+Step  5: Pop (5, 1)   push [(5,2)]                   Stack: [(1,2), (3,2), (5,2)]
+Step  6: Pop (5, 2)   push [(5,3)]                   Stack: [(1,2), (3,2), (5,3)]
+Step  7: Pop (5, 3)   push [(5,4), (4,3)]            Stack: [(1,2), (3,2), (5,4), (4,3)]
+Step  8: Pop (4, 3)   push []                        Stack: [(1,2), (3,2), (5,4)]
+Step  9: Pop (5, 4)   push [(5,5)]                   Stack: [(1,2), (3,2), (5,5)]
+Step 10: Pop (5, 5) -> GOAL REACHED
+
+Nodes expanded (order): [(1,1), (2,1), (3,1), (4,1), (5,1), (5,2), (5,3), (4,3), (5,4), (5,5)]
+Path : (1, 1) -> (2, 1) -> (3, 1) -> (4, 1) -> (5, 1) -> (5, 2) -> (5, 3) -> (5, 4) -> (5, 5)
+Cost : 8
+
+   c1 c2 c3 c4 c5
+r1  S   .   .   .   .
+r2  *   #   #   .   .
+r3  *   .   #   .   .
+r4  *   #   .   #   .
+r5  *   *   *   *   G

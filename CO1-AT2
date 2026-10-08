@@ -1,0 +1,345 @@
+PROGRAM CODE:
+"""
+Constraint-Based Problem Solving: Exam Scheduling
+Variables: A, B, C, D, E (Courses)
+Domains: Slot1, Slot2, Slot3
+Algorithms: Brute-force check, Plain Backtracking, Backtracking with Forward Checking
+"""
+
+import copy
+from itertools import product
+
+# --- PART (c): CSP Formulation & Graph ---
+VARIABLES = ["A", "B", "C", "D", "E"]
+NAMES = {
+    "A": "Artificial Intelligence",
+    "B": "Database Systems",
+    "C": "Computer Networks",
+    "D": "Operating Systems",
+    "E": "Software Engineering"
+}
+DOMAIN = ["Slot1", "Slot2", "Slot3"]
+DOMAINS = {v: list(DOMAIN) for v in VARIABLES}
+CONSTRAINTS = [
+    ("A", "B"), ("A", "C"), ("B", "C"), ("B", "D"),
+    ("C", "D"), ("C", "E"), ("D", "E")
+]
+
+# Build adjacency list
+GRAPH = {v: [] for v in VARIABLES}
+for x, y in CONSTRAINTS:
+    GRAPH[x].append(y)
+    GRAPH[y].append(x)
+
+def neighbours(v):
+    return [y if x == v else x for x, y in CONSTRAINTS if v in (x, y)]
+
+def conflict(var, val, assignment):
+    """Return the already-assigned neighbour that clashes, else None."""
+    for n in neighbours(var):
+        if assignment.get(n) == val:
+            return n
+    return None
+
+def show(assign):
+    return "{" + ", ".join(f"'{k}': '{v}'" for k, v in assign.items()) + "}"
+
+def short(vals):
+    return "{" + ",".join(s[-1] for s in vals) + "}" if vals else "{}"
+
+def show_domains(domains, assignment):
+    parts = []
+    for v in VARIABLES:
+        if v in assignment:
+            parts.append(f"{v}={assignment[v][-1]}")
+        else:
+            parts.append(f"{v}:{short(domains[v])}")
+    return " ".join(parts)
+
+# --- PART (d): Plain Backtracking ---
+attempts = failed = backtracks = step = 0
+assignment = {}
+
+def backtrack(i):
+    global attempts, failed, backtracks, step
+    if i == len(VARIABLES):
+        return True
+    var = VARIABLES[i]
+    for val in DOMAIN:
+        step += 1
+        attempts += 1
+        clash = conflict(var, val, assignment)
+        if clash:
+            failed += 1
+            print(f"{step:3d} | {var} = {val:<5s} | clashes with {clash} ({assignment[clash]}) | REJECT | {show(assignment)}")
+            continue
+        
+        assignment[var] = val
+        print(f"{step:3d} | {var} = {val:<5s} | no clash                 | ASSIGN | {show(assignment)}")
+        
+        if backtrack(i + 1):
+            return True
+            
+        del assignment[var]  # undo (backtrack)
+        backtracks += 1
+        print(f"    | BACKTRACK: undo {var} = {val}")
+    return False
+
+# --- PART (e): Backtracking with Forward Checking ---
+fc_attempts = fc_failed = fc_backtracks = fc_step = 0
+fc_assignment = {}
+
+def fc_search(i, domains):
+    global fc_attempts, fc_failed, fc_backtracks, fc_step
+    if i == len(VARIABLES):
+        return True
+    var = VARIABLES[i]
+    for val in list(domains[var]):
+        fc_step += 1
+        fc_attempts += 1
+        
+        new = copy.deepcopy(domains)
+        new[var] = [val]
+        fc_assignment[var] = val
+        
+        pruned = []
+        wipeout = False
+        for n in neighbours(var):
+            if n not in fc_assignment and val in new[n]:
+                new[n].remove(val)
+                pruned.append(f"{val[-1]} from {n}")
+                if not new[n]:
+                    wipeout = True
+                    
+        pruned_str = ", ".join(pruned) if pruned else "nothing"
+        print(f"{fc_step:3d} | assign {var}={val:<5s} | pruned: {pruned_str:<22s} | {show_domains(new, fc_assignment)}")
+        
+        if wipeout:
+            fc_failed += 1
+            del fc_assignment[var]
+            fc_backtracks += 1
+            print(f"    | DOMAIN WIPEOUT -> undo {var} = {val}")
+            continue
+            
+        if fc_search(i + 1, new):
+            return True
+            
+        del fc_assignment[var]
+        fc_backtracks += 1
+        print(f"    | BACKTRACK: undo {var} = {val}")
+    return False
+
+# --- PART (f): Independent Execution Comparison Functions ---
+def plain_bt_silent(slots):
+    st = dict(attempts=0, failed=0, backtracks=0)
+    asg = {}
+    def rec(i):
+        if i == len(VARIABLES): return True
+        v = VARIABLES[i]
+        for val in slots:
+            st["attempts"] += 1
+            if any(asg.get(n) == val for n in neighbours(v)):
+                st["failed"] += 1
+                continue
+            asg[v] = val
+            if rec(i + 1): return True
+            del asg[v]
+            st["backtracks"] += 1
+        return False
+    st["solved"] = rec(0)
+    return st, asg
+
+def forward_checking_silent(slots):
+    st = dict(attempts=0, failed=0, backtracks=0)
+    asg = {}
+    def rec(i, dom):
+        if i == len(VARIABLES): return True
+        v = VARIABLES[i]
+        for val in list(dom[v]):
+            st["attempts"] += 1
+            new = copy.deepcopy(dom)
+            asg[v] = val
+            wipeout = False
+            for n in neighbours(v):
+                if n not in asg and val in new[n]:
+                    new[n].remove(val)
+                    if not new[n]: wipeout = True
+            if wipeout:
+                st["failed"] += 1
+                del asg[v]
+                st["backtracks"] += 1
+                continue
+            if rec(i + 1, new): return True
+            del asg[v]
+            st["backtracks"] += 1
+        return False
+    initial_dom = {v: list(slots) for v in VARIABLES}
+    st["solved"] = rec(0, initial_dom)
+    return st
+
+def report(title, slots):
+    bt, _ = plain_bt_silent(slots)
+    fc = forward_checking_silent(slots)
+    print(f"\n{title}")
+    print(f"{'Measure':<26} {'Plain BT':>10} {'BT + FC':>10}")
+    print("-" * 48)
+    print(f"{'Solution found':<26} {str(bt['solved']):>10} {str(fc['solved']):>10}")
+    print(f"{'Assignment attempts':<26} {bt['attempts']:>10} {fc['attempts']:>10}")
+    print(f"{'Failed attempts':<26} {bt['failed']:>10} {fc['failed']:>10}")
+    print(f"{'Backtracks':<26} {bt['backtracks']:>10} {fc['backtracks']:>10}")
+    saved = 100 * (bt["attempts"] - fc["attempts"]) / bt["attempts"] if bt["attempts"] > 0 else 0
+    print(f"Attempts saved by FC: {saved:.1f}%")
+
+# --- MAIN EXECUTION ---
+if __name__ == "__main__":
+    print("Variables :", VARIABLES)
+    for v in VARIABLES:
+        print(f"Domain({v}) : {DOMAINS[v]} <- {NAMES[v]}")
+    
+    print("\nConstraints (binary, 'not equal'):")
+    for x, y in CONSTRAINTS:
+        print(f"  {x} != {y}")
+        
+    print("\nConstraint graph")
+    print("Vertices :", VARIABLES)
+    print(f"Edges    : {CONSTRAINTS} (total {len(CONSTRAINTS)})")
+    print("\nAdjacency list / degree:")
+    for v in VARIABLES:
+        print(f"  {v}: {sorted(GRAPH[v])} degree = {len(GRAPH[v])}")
+        
+    # Brute-force verification
+    solutions = []
+    for values in product(DOMAIN, repeat=len(VARIABLES)):
+        asg = dict(zip(VARIABLES, values))
+        if all(asg[x] != asg[y] for x, y in CONSTRAINTS):
+            solutions.append(asg)
+    print(f"\nTotal complete assignments : {len(DOMAIN)**len(VARIABLES)}")
+    print(f"Valid (conflict-free) ones : {len(solutions)}")
+    print(f"First valid timetable      : {solutions[0]}")
+    
+    print("\n" + "="*72)
+    print("PART (d): PLAIN BACKTRACKING SEARCH")
+    print("="*72)
+    print(f"{'Step':<4} | {'Try':<10} | {'Constraint check':<30} | {'Result':<6} | {'Assignment so far'}")
+    print("-" * 90)
+    ok = backtrack(0)
+    print("-" * 90)
+    print("Solution found:", ok)
+    print("Timetable      :", assignment)
+    print("Assignment attempts :", attempts)
+    print("Failed attempts     :", failed)
+    print("Backtracks          :", backtracks)
+    
+    print("\n" + "="*72)
+    print("PART (e): BACKTRACKING WITH FORWARD CHECKING")
+    print("="*72)
+    initial_domains = {v: list(DOMAIN) for v in VARIABLES}
+    print("Initial domains :", show_domains(initial_domains, {}))
+    print("(domain values shown as 1,2,3 = Slot1,Slot2,Slot3)")
+    print("-" * 92)
+    ok_fc = fc_search(0, initial_domains)
+    print("-" * 92)
+    print("Solution found:", ok_fc)
+    print("Timetable      :", fc_assignment)
+    print("Assignment attempts :", fc_attempts)
+    print("Failed attempts     :", fc_failed)
+    print("Backtracks          :", fc_backtracks)
+    
+    print("\n" + "="*72)
+    print("PART (f): COMPARISON STATISTICS RUN")
+    print("="*72)
+    report("Given problem (3 slots)", ["Slot1", "Slot2", "Slot3"])
+    report("Supplementary test: same graph with only 2 slots (unsolvable)", ["Slot1", "Slot2"])
+
+OUTPUT:
+Variables : ['A', 'B', 'C', 'D', 'E']
+Domain(A) : ['Slot1', 'Slot2', 'Slot3'] <- Artificial Intelligence
+Domain(B) : ['Slot1', 'Slot2', 'Slot3'] <- Database Systems
+Domain(C) : ['Slot1', 'Slot2', 'Slot3'] <- Computer Networks
+Domain(D) : ['Slot1', 'Slot2', 'Slot3'] <- Operating Systems
+Domain(E) : ['Slot1', 'Slot2', 'Slot3'] <- Software Engineering
+
+Constraints (binary, 'not equal'):
+  A != B
+  A != C
+  B != C
+  B != D
+  C != D
+  C != E
+  D != E
+
+Constraint graph
+Vertices : ['A', 'B', 'C', 'D', 'E']
+Edges    : [('A', 'B'), ('A', 'C'), ('B', 'C'), ('B', 'D'), ('C', 'D'), ('C', 'E'), ('D', 'E')] (total 7)
+
+Adjacency list / degree:
+  A: ['B', 'C'] degree = 2
+  B: ['A', 'C', 'D'] degree = 3
+  C: ['A', 'B', 'D', 'E'] degree = 4
+  D: ['B', 'C', 'E'] degree = 3
+  E: ['C', 'D'] degree = 2
+
+Total complete assignments : 243
+Valid (conflict-free) ones : 6
+First valid timetable      : {'A': 'Slot1', 'B': 'Slot2', 'C': 'Slot3', 'D': 'Slot1', 'E': 'Slot2'}
+
+========================================================================
+PART (d): PLAIN BACKTRACKING SEARCH
+========================================================================
+Step | Try        | Constraint check               | Result | Assignment so far
+------------------------------------------------------------------------------------------
+  1 | A = Slot1 | No assigned neighbour          | ASSIGN | {'A': 'Slot1'}
+  2 | B = Slot1 | clashes with A (Slot1)         | REJECT | {'A': 'Slot1'}
+  3 | B = Slot2 | no clash                       | ASSIGN | {'A': 'Slot1', 'B': 'Slot2'}
+  4 | C = Slot1 | clashes with A (Slot1)         | REJECT | {'A': 'Slot1', 'B': 'Slot2'}
+  5 | C = Slot2 | clashes with B (Slot2)         | REJECT | {'A': 'Slot1', 'B': 'Slot2'}
+  6 | C = Slot3 | no clash                       | ASSIGN | {'A': 'Slot1', 'B': 'Slot2', 'C': 'Slot3'}
+  7 | D = Slot1 | no clash                       | ASSIGN | {'A': 'Slot1', 'B': 'Slot2', 'C': 'Slot3', 'D': 'Slot1'}
+  8 | E = Slot1 | clashes with D (Slot1)         | REJECT | {'A': 'Slot1', 'B': 'Slot2', 'C': 'Slot3', 'D': 'Slot1'}
+  9 | E = Slot2 | no clash                       | ASSIGN | {'A': 'Slot1', 'B': 'Slot2', 'C': 'Slot3', 'D': 'Slot1', 'E': 'Slot2'}
+------------------------------------------------------------------------------------------
+Solution found: True
+Timetable      : {'A': 'Slot1', 'B': 'Slot2', 'C': 'Slot3', 'D': 'Slot1', 'E': 'Slot2'}
+Assignment attempts : 9
+Failed attempts     : 4
+Backtracks          : 0
+
+========================================================================
+PART (e): BACKTRACKING WITH FORWARD CHECKING
+========================================================================
+Initial domains : A:{1,2,3} B:{1,2,3} C:{1,2,3} D:{1,2,3} E:{1,2,3}
+(domain values shown as 1,2,3 = Slot1,Slot2,Slot3)
+--------------------------------------------------------------------------------------------
+  1 | assign A=Slot1 | pruned: 1 from B, 1 from C     | A=1 B:{2,3} C:{2,3} D:{1,2,3} E:{1,2,3}
+  2 | assign B=Slot2 | pruned: 2 from C, 2 from D     | A=1 B=2 C:{3} D:{1,3} E:{1,2,3}
+  3 | assign C=Slot3 | pruned: 3 from D, 3 from E     | A=1 B=2 C=3 D:{1} E:{1,2}
+  4 | assign D=Slot1 | pruned: 1 from E               | A=1 B=2 C=3 D=1 E:{2}
+  5 | assign E=Slot2 | pruned: nothing                | A=1 B=2 C=3 D=1 E=2
+--------------------------------------------------------------------------------------------
+Solution found: True
+Timetable      : {'A': 'Slot1', 'B': 'Slot2', 'C': 'Slot3', 'D': 'Slot1', 'E': 'Slot2'}
+Assignment attempts : 5
+Failed attempts     : 0
+Backtracks          : 0
+
+========================================================================
+PART (f): COMPARISON STATISTICS RUN
+========================================================================
+
+Given problem (3 slots)
+Measure                      Plain BT    BT + FC
+------------------------------------------------
+Solution found                   True       True
+Assignment attempts                 9          5
+Failed attempts                     4          0
+Backtracks                          0          0
+Attempts saved by FC: 44.4%
+
+Supplementary test: same graph with only 2 slots (unsolvable)
+Measure                      Plain BT    BT + FC
+------------------------------------------------
+Solution found                  False      False
+Assignment attempts                10          4
+Failed attempts                     6          2
+Backtracks                          4          4
+Attempts saved by FC: 60.0%
